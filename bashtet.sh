@@ -95,10 +95,11 @@ gen_moves() {
 }
 
 echo '{"type":"info","name":"Bashtet","version":"1","author":"Analog Hors","features":[]}'
-read msg
-echo '{"type":"ready"}'
-sed -uE "s/\s+//g" | while read msg; do
-    case $(str_field "type" <<< "$msg" | grep -E "^(start|stop|suggest|play|new_piece|quit)$") in
+while read msg; do
+    case $(sed -uE "s/\s+//g" <<< "$msg" | str_field "type" | grep -E "^(start|stop|suggest|play|new_piece|quit|rules)$") in
+        "rules")
+            echo '{"type":"ready"}' & #TODO make this error on invalid rulesets?
+            ;;
         "start")
             hold=$(str_field "hold" <<< "$msg")
             queue=($(grep -oP "(?<=\"queue\":\[)[\w\"\,]*" <<< "$msg" | sed "s/,/ /g" | xargs))
@@ -111,8 +112,10 @@ sed -uE "s/\s+//g" | while read msg; do
             elif [ -n "${queue[1]}" ]; then
                 pieces+=("${queue[1]}")
             fi
-            moves=$(gen_moves "${pieces[@]}" | sort -t ";" -k 2 -n -r | cut -d ";" -f 1 | paste -sd "," -)
-            echo "{\"type\":\"suggestion\",\"moves\":[$moves]}"
+            {
+                moves=$(gen_moves "${pieces[@]}" | sort -t ";" -k 2 -n -r | cut -d ";" -f 1 | paste -sd "," -)
+                echo "{\"type\":\"suggestion\",\"moves\":[$moves]}"
+            } &
             ;;
         "play")
             piece_x=$(grep -oP "(?<=\"x\":)\d*" <<< "$msg")
@@ -156,6 +159,7 @@ sed -uE "s/\s+//g" | while read msg; do
             queue+=($(str_field "piece" <<< "$msg"))
             ;;
         "quit")
+            kill -- -$$
             exit
             ;;
     esac
